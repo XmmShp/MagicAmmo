@@ -1,17 +1,10 @@
-#include <sourcemod>
-#include <sdktools>
-#include <sdkhooks>
-#include <cstrike>
+#include <laper32>
 
-#include <smutils>
-#include <maaoxm>  
+#define MAXN 256
+#define WEAPONMAX 80
 
-#define AmmoType(i) ClientData[i].ammotype
-#define AmmoNum(i,j) ClientData[i].ammonum[j]
-#define AmmoNumNow(i) ClientData[i].ammonum[ClientData[i].ammotype]
-
-#define MAXN 0xff
-#define M 2048
+#define AmmoType(%1) ClientData[%1].ammotype[ToolsGetActiveWeapon(%l)]
+#define AmmoNumNow(%1) ClientData[%1].ammonum[AmmoType(%1)]
 
 int AmmoCount=0;
 
@@ -19,32 +12,71 @@ public Plugin myinfo={
 	name= "MagicAmmo",
 	author= "XmmShp",
 	description= "A test plugin",
-	version= "0.2",
+	version= "1.1",
 	url=""
 };
 
-struct stDataAmmo{
+enum struct StDataAmmo{
 	char Name[MAXN];
-	int CanUse[MAXN];
+	int CanUse[WEAPONMAX];
+	int Prize;
+	void Init(){
+		for(int i=0;i<WEAPONMAX;i++)
+			this.CanUse[i]=0;
+	}
+	void Active(int p){this.CanUse[p]=1;}
+}
+StDataAmmo Ammo[MAXN];
+
+enum struct StDataClient{
+	int ammotype[WEAPONMAX];
+	int ammonum[MAXN];
 	void Init(){
 		for(int i=0;i<MAXN;i++)
-			CanUse[i]=0;
+			this.ammonum[i]=0;
+		for(int i=0;i<WEAPONMAX;i++)
+			this.ammotype[i]=0;
 	}
 }
-stDataAmmo Ammo[MAXN];
+StDataClient ClientData[MAXN];
 
-struct stDataClient{
-	int ammotype;
-	int ammonum[M];
-	void Init(){
-		ammotype=0;
-		for(int i=0;i<M;i++)
-			ammonum[i]=0;
-	}
+stock int GetClientMoney(int client){
+    return GetEntProp(client, Prop_Send, "m_iAccount");
 }
-stDataClient ClientData[MAXN];
+
+stock void SetClientMoney(int client,int val){
+	SetEntProp(client, Prop_Send, "m_iAccount", val);
+}
+
+void myAdd(int &x,int val,int Mod){
+	x=x+val;
+	if(x>Mod)x=0;
+	else if(x<0)x=Mod;
+}
+
+stock bool ExistAmmo(int index){
+	return index<=AmmoCount && index >=0;
+}
+
+void InitAmmo(){
+	Ammo[++AmmoCount].Name="手工子弹[手枪]";
+	Ammo[AmmoCount].Prize=15;
+	Ammo[AmmoCount].Active(ItemDef_Glock);
+	Ammo[AmmoCount].Active(ItemDef_Elite);
+	Ammo[AmmoCount].Active(ItemDef_FiveSeven);
+	Ammo[AmmoCount].Active(ItemDef_USP);
+	Ammo[AmmoCount].Active(ItemDef_Deagle);
+	Ammo[AmmoCount].Active(ItemDef_TEC9);
+	Ammo[AmmoCount].Active(ItemDef_P250);
+	Ammo[AmmoCount].Active(ItemDef_CZ75A);
+	Ammo[AmmoCount].Active(ItemDef_HKP2000);
+	Ammo[AmmoCount].Active(ItemDef_Revolver);
+//----------------------------------------------
+	
+}
 
 public void OnPluginStart(){
+	InitAmmo();
 	for(int i=0;i<MAXN;i++)ClientData[i].Init();
 	HookEvent("weapon_fire", Event_WeaponFire);
 	HookEvent("player_spawned",Event_PlayerSpawn);
@@ -55,16 +87,20 @@ public void OnPluginStart(){
 
 void ToggleMode(int client,int Mode=-1){
 	if(!IsPlayerExist(client))return;
-	if(Mode!=-1)
-		myAdd(ClientData[client].ammotype,1,AmmoCount);
-	else if(Mode==AmmoType(client))
-		return;
-	else ClientData[client].ammotype=Mode;
-	if(!AmmoType(client)||AmmoNumNow(client)){
-		if(AmmoType(i))
-			Chat(client,"当前子弹 : %s , 剩余数量 %d 枚",AmmoName[AmmoType(i)],AmmoNumNow(i));
+	int weaponid=ToolsGetActiveWeapon(client);
+	if(IsProjectile(weaponid)||IsKnife(weaponid))return;
+	if(Mode!=-1){
+		myAdd(AmmoType(client),1,AmmoCount);
+	}
+	else if(Mode==AmmoType(client))return;
+	else if(ExistAmmo(Mode))AmmoType(client)=Mode;
+	else return;
+	
+	if(!AmmoType(client)||(AmmoNumNow(client)&&Ammo[AmmoType(client)])){
+		if(AmmoType(client))
+			PrintToChat(client,"当前子弹 : %s , 剩余数量 %d 枚",Ammo[AmmoType(client)].Name,AmmoNumNow(client));
 		else 
-			Chat(client,"当前子弹 : %s",AmmoName[AmmoType(i)]);
+			PrintToChat(client,"当前子弹 : 普通子弹");
 		return;
 	}
 	else ToggleMode(client);	
@@ -76,13 +112,12 @@ public int FreezeMenuHandler(Menu menu, MenuAction action, int param1, int param
 		char info[MAXN];
 		menu.GetItem(param2,info,sizeof(info));
 		int index = StringToInt(info);
-		if(GetClientMoney(client)<AmmoPrize[index]){
-			Chat(client,"你没有足够的资金来购买这组弹药！")
+		if(GetClientMoney(client)>=Ammo[index].Prize){
+			ClientData[client].ammonum[index]++;
+			SetClientMoney(i, GetClientMoney(i) - Ammo[index].Prize);
 		}
 		else {
-			Chat(client,"%d枚%s已经购买！",AmmoGroup[index],AmmoName[index]);
-			SetClientMoney(client,GetClientMoney(client)-AmmoPrize[index]);
-			ClientData[client].ammonum[index]+=AmmoGroup[index];
+			Chat(client,"你没有足够的金钱购买 %s !",Ammo[index].Name);
 		}
 	} 
 	else if(action == MenuAction_End) {
@@ -92,57 +127,63 @@ public int FreezeMenuHandler(Menu menu, MenuAction action, int param1, int param
 
 public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcast) {
 	int client=GetClientOfUserId(event.GetInt("userid"));
-	if(!IsPlayerExist(client))
+	if(!IsPlayerExist(client))return;
 	if(AmmoType(client) && AmmoNumNow(client)){
-		ClientData[client].ammonum[ClientData[client].ammotype]--;
+		AmmoNumNow(client)--;
 		if(!AmmoNumNow(client)){
-			Chat(client,"你的%s已经消耗光了！",AmmoName[AmmoType(client)]);
+			PrintToChat(client,"你的%s已经消耗光了！",Ammo[AmmoType(client)].Name);
 			ToggleMode(client,0);
 		}
 	}
 }
 
 public Action Event_OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype, int& weapon, float damageForce[3], float damagePosition[3]){
-	
+	if(!IsPlayerExist(client))return Plugin_Continue;
+	if(IsKnife(weapon)||IsProjectile(weapon))return Plugin_Continue;
+	if(!ClientData[attacker].ammotype[weapon])return Plugin_Continue;
+	switch(ClientData[attacker].ammotype[weapon]){
+		case 1:{
+			damage=damage*1.2;
+			PrintToChat(attacker,"使用手工子弹！伤害x1.2！");
+		}
+	}
 	return Plugin_Changed;
-}
-public Action Event_ChangeWeapon(int client, int weapon){
-	
-	return Plugin_Continue;
 }
 
 public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast) {
 	int client=GetClientOfUserId(event.GetInt("userid"));
-	if(!IsPlayerExist(client,0))return;
+	if(!IsPlayerExist(client,0))
+		return;
 	SDKHook(client,SDKHook_OnTakeDamage,Event_OnTakeDamage);
-	SDKHook(client,SDKHook_WeaponDropPost,Event_ChangeWeapon);
-	SDKHook(client,SDKHook_WeaponEquipPost,Event_ChangeWeapon);
-	SDKHook(client,SDKHook_WeaponSwitchPost,Event_ChangeWeapon);
 }
 
 public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast) {
 	int client=GetClientOfUserId(event.GetInt("userid"));
-	if(!IsPlayerExist(client,0))return;
+	if(!IsPlayerExist(client,0))
+		return;
 	ClientData[client].Init();
-	SDKUnHook(client,SDKHook_OnTakeDamage,Event_OnTakeDamage);
-	SDKUnHook(client,SDKHook_WeaponDropPost,Event_ChangeWeapon);
-	SDKUnHook(client,SDKHook_WeaponEquipPost,Event_ChangeWeapon);
-	SDKUnHook(client,SDKHook_WeaponSwitchPost,Event_ChangeWeapon);
+	SDKUnhook(client,SDKHook_OnTakeDamage,Event_OnTakeDamage);
 }
 
 
 void ShowFreezeMenu(int client){
 	if(!IsPlayerExist(client))return;
+	int weaponid=ToolsGetActiveWeapon(client);
+	if(IsProjectile(weaponid)||IsKnife(weaponid)){
+		PrintToChat(client,"请手持可装配特殊子弹的武器呼出菜单！");
+		return;
+	}
     Menu menu = new Menu(FreezeMenuHandler, MENU_ACTIONS_DEFAULT | MenuAction_DisplayItem);
     menu.SetTitle("[特殊子弹商店]\n ");
-    char display[1<<10],Tmp[1<<10];
-    for(int i = 1; i <= AmmoCount; i++){
+    char display[MAXN],Tmp[MAXN];
+    for(int i = 1; i <= AmmoCount; i++)
+	if(Ammo[i].CanUse[weaponid]){
 		IntToString(i,Tmp,sizeof(Tmp));
-		Format(display,sizeof(display),"%s [%d $ / %d 枚]",AmmoName[i],AmmoPrize[i],AmmoGroup[i]);
+		Format(display,sizeof(display),"%s [%d $ / 枚]",Ammo[i].Name,Ammo[i].Prize);
 		menu.AddItem(Tmp, display);
     }
     menu.ExitButton = true;
-    menu.Display(client);
+    menu.Display(client,0);
 }
 
 public Action Command_BuyAmmo(int client, int args) {
