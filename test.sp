@@ -3,10 +3,10 @@
 #define MAXN 256
 #define WEAPONMAX 80
 
-#define AmmoType(%1) ClientData[%1].ammotype[ToolsGetActiveWeapon(%l)]
+#define AmmoType(%1) ClientData[%1].ammotype[GetClientActiveWeapon(%1)]
 #define AmmoNumNow(%1) ClientData[%1].ammonum[AmmoType(%1)]
 
-int AmmoCount=0;
+static int AmmoCount=0;
 
 public Plugin myinfo={
 	name= "MagicAmmo",
@@ -75,6 +75,14 @@ void InitAmmo(){
 	
 }
 
+stock int GetClientActiveWeapon(int client){
+	char buf[MAXN],bf2[MAXN];
+	GetClientWeapon(client,buf,sizeof(buf));
+	CS_GetTranslatedWeaponAlias(buf,bf2,sizeof(bf2));
+	int weaponid=CS_WeaponIDToItemDefIndex(CS_AliasToWeaponID(bf2));
+	return weaponid;
+}
+
 public void OnPluginStart(){
 	InitAmmo();
 	for(int i=0;i<MAXN;i++)ClientData[i].Init();
@@ -87,16 +95,16 @@ public void OnPluginStart(){
 
 void ToggleMode(int client,int Mode=-1){
 	if(!IsPlayerExist(client))return;
-	int weaponid=ToolsGetActiveWeapon(client);
+	int weaponid=GetClientActiveWeapon(client);
 	if(IsProjectile(weaponid)||IsKnife(weaponid))return;
-	if(Mode!=-1){
+	if(Mode==-1){
 		myAdd(AmmoType(client),1,AmmoCount);
 	}
 	else if(Mode==AmmoType(client))return;
 	else if(ExistAmmo(Mode))AmmoType(client)=Mode;
 	else return;
 	
-	if(!AmmoType(client)||(AmmoNumNow(client)&&Ammo[AmmoType(client)])){
+	if(!AmmoType(client)||(AmmoNumNow(client)&&Ammo[AmmoType(client)].CanUse[GetClientActiveWeapon(client)])){
 		if(AmmoType(client))
 			PrintToChat(client,"当前子弹 : %s , 剩余数量 %d 枚",Ammo[AmmoType(client)].Name,AmmoNumNow(client));
 		else 
@@ -114,10 +122,10 @@ public int FreezeMenuHandler(Menu menu, MenuAction action, int param1, int param
 		int index = StringToInt(info);
 		if(GetClientMoney(client)>=Ammo[index].Prize){
 			ClientData[client].ammonum[index]++;
-			SetClientMoney(i, GetClientMoney(i) - Ammo[index].Prize);
+			SetClientMoney(client, GetClientMoney(client) - Ammo[index].Prize);
 		}
 		else {
-			Chat(client,"你没有足够的金钱购买 %s !",Ammo[index].Name);
+			PrintToChat(client,"你没有足够的金钱购买 %s !",Ammo[index].Name);
 		}
 	} 
 	else if(action == MenuAction_End) {
@@ -138,7 +146,7 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
 }
 
 public Action Event_OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype, int& weapon, float damageForce[3], float damagePosition[3]){
-	if(!IsPlayerExist(client))return Plugin_Continue;
+	if(!IsPlayerExist(attacker)||!IsPlayerExist(victim))return Plugin_Continue;
 	if(IsKnife(weapon)||IsProjectile(weapon))return Plugin_Continue;
 	if(!ClientData[attacker].ammotype[weapon])return Plugin_Continue;
 	switch(ClientData[attacker].ammotype[weapon]){
@@ -168,7 +176,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 
 void ShowFreezeMenu(int client){
 	if(!IsPlayerExist(client))return;
-	int weaponid=ToolsGetActiveWeapon(client);
+	int weaponid=GetClientActiveWeapon(client);
 	if(IsProjectile(weaponid)||IsKnife(weaponid)){
 		PrintToChat(client,"请手持可装配特殊子弹的武器呼出菜单！");
 		return;
