@@ -7,6 +7,7 @@
 #define AmmoNumNow(%1) ClientData[%1].ammonum[AmmoType(%1)]
 #define AmmoCount ServerData.iAmmoCount
 
+#define MAXSPEED 250
 
 public Plugin myinfo={
 	name= "MagicAmmo",
@@ -77,7 +78,10 @@ void InitAmmo(){
 	Ammo[AmmoCount].Active(view_as<int>(ItemDef_HKP2000));
 	Ammo[AmmoCount].Active(view_as<int>(ItemDef_Revolver));
 //----------------------------------------------
-
+	Ammo[++AmmoCount].Name="推进子弹[USP/Glock]";
+	Ammo[AmmoCount].Prize=50;
+	Ammo[AmmoCount].Active(view_as<int>(ItemDef_USP));
+	Ammo[AmmoCount].Active(view_as<int>(ItemDef_Glock));
 /* 
 JSON
 
@@ -107,6 +111,14 @@ stock int GetClientActiveWeapon(int client){
 	CS_GetTranslatedWeaponAlias(buf,bf2,sizeof(bf2));
 	int weaponid=CS_WeaponIDToItemDefIndex(CS_AliasToWeaponID(bf2));
 	return weaponid;
+}
+
+stock void VecShorten(float vs[3],float vr[3],float val){
+	float len=GetVectorLength(vs);
+	float rate=val/len;
+	vr[0]=vs[0]*rate;
+	vr[1]=vs[1]*rate;
+	vr[2]=vs[2]*rate;
 }
 
 public void OnPluginStart(){
@@ -189,6 +201,12 @@ public Action Event_OnTakeDamage(int victim, int& attacker, int& inflictor, floa
 		case 1:{
 			damage=damage*1.2;
 			PrintToChat(attacker,"使用手工子弹！伤害x1.2！");
+		}
+		case 2:{
+			float Vel[3];
+			VecShorten(damageForce,Vel,MAXSPEED*1.0);
+			ToolsSetVelocity(victim,Vel);
+			PrintToChat(attacker,"使用推进子弹！对敌人造成击退！");
 		}
 	}
 	return Plugin_Changed;
