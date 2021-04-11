@@ -54,6 +54,8 @@ stock void SetClientMoney(int client,int val){
 	SetEntProp(client, Prop_Send, "m_iAccount", val);
 }
 
+stock float Max(float a,float b){return a>b?a:b;}
+
 void myAdd(int &x,int val,int Mod){
 	x=x+val;
 	if(x>Mod)x=0;
@@ -78,10 +80,9 @@ void InitAmmo(){
 	Ammo[AmmoCount].Active(view_as<int>(ItemDef_HKP2000));
 	Ammo[AmmoCount].Active(view_as<int>(ItemDef_Revolver));
 //----------------------------------------------
-	Ammo[++AmmoCount].Name="推进子弹[USP/Glock]";
-	Ammo[AmmoCount].Prize=50;
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_USP));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_Glock));
+	Ammo[++AmmoCount].Name="推进子弹[Scout]";
+	Ammo[AmmoCount].Prize=450;
+	Ammo[AmmoCount].Active(view_as<int>(ItemDef_SSG08));
 /* 
 JSON
 
@@ -203,8 +204,11 @@ public Action Event_OnTakeDamage(int victim, int& attacker, int& inflictor, floa
 			PrintToChat(attacker,"使用手工子弹！伤害x1.2！");
 		}
 		case 2:{
-			float Vel[3];
-			VecShorten(damageForce,Vel,MAXSPEED*1.0);
+			float Vel[3],Cop[3];
+			Cop[0]=damageForce[0];Cop[1]=damageForce[1];Cop[2]=0.0;
+			VecShorten(Cop,Vel,MAXSPEED*2.0);
+			Vel[2]=Max(MAXSPEED*2+1.0,damageForce[2]);
+			// PrintToChat(attacker,"%f %f %f:%f %f %f",damageForce[0],damageForce[1],damageForce[2],Vel[0],Vel[1],Vel[2]);
 			ToolsSetVelocity(victim,Vel);
 			PrintToChat(attacker,"使用推进子弹！对敌人造成击退！");
 		}
