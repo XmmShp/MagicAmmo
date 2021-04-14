@@ -17,17 +17,30 @@ public Plugin myinfo={
 	url=""
 };
 
-enum struct StDataAmmo{
-	char Name[MAXN];
-	int CanUse[WEAPONMAX];
-	int Prize;
-	void Init(){
-		for(int i=0;i<WEAPONMAX;i++)
-			this.CanUse[i]=0;
+/* 
+"Section"
+{
+	"Key"			"Value"
+	"NestedSection"
+	{
+		"NestedKey" "NextedValue"
 	}
-	void Active(int p){this.CanUse[p]=1;}
 }
-StDataAmmo Ammo[MAXN];
+"m_NameTextKey"
+{
+
+}
+
+char sName[128];
+Format(string(sName), "%t", "pistol_handmaking");
+
+Name + Price + 
+ */
+
+
+enum struct StDataAmmo{
+	/*rewrite*/
+}
 
 enum struct StDataClient{
 	int ammotype[WEAPONMAX];
@@ -41,20 +54,13 @@ enum struct StDataClient{
 }
 StDataClient ClientData[MAXN];
 
-enum struct StServerData{
-	int iAmmoCount;
-}
-StServerData ServerData;
+// enum struct StServerData{
+// 	int iAmmoCount;
+//  ArrayList m_AmmoData;
+// }
+// StServerData ServerData;
 
-stock int GetClientMoney(int client){
-	return GetEntProp(client, Prop_Send, "m_iAccount");
-}
-
-stock void SetClientMoney(int client,int val){
-	SetEntProp(client, Prop_Send, "m_iAccount", val);
-}
-
-stock float Max(float a,float b){return a>b?a:b;}
+public void AddAmmoToCFG(/*rewrite*/)
 
 void myAdd(int &x,int val,int Mod){
 	x=x+val;
@@ -67,51 +73,113 @@ stock bool ExistAmmo(int index){
 }
 
 void InitAmmo(){
-	Ammo[++AmmoCount].Name="手工子弹[手枪]";
-	Ammo[AmmoCount].Prize=15;
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_Glock));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_Elite));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_FiveSeven));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_USP));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_Deagle));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_TEC9));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_P250));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_CZ75A));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_HKP2000));
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_Revolver));
-//----------------------------------------------
-	Ammo[++AmmoCount].Name="推进子弹[Scout]";
-	Ammo[AmmoCount].Prize=450;
-	Ammo[AmmoCount].Active(view_as<int>(ItemDef_SSG08));
 /* 
-JSON
+JSON for ammo
 
 {
-	"AmmoType": {
+	"Ammo": {
 		{
-			"m_ammoName": "${ammoName}",
-			"m_ammoPrice": "${ammoPrice}",
+			"Enabled": "", //Bool:Enable ammo or not
+			"Name": "",//String:Ammo's name to display
+			"Price": "",//Int:Ammo's prize for per ammo
+			"BuyTime": "" //enum String:When can ammo be bought :"All" | "PreRound" | "InRound",
+			"GroupNum": "",//Int:If the ammo can be bought in preround,how many ammo's will be bought in once
+			"Describe": "",//String:The describe of ammo
 			"m_availableWeapon": [
-				"weapon_m4a1", "weapon_${Arbitrary}"
-			]
-			"callback":"${funcName}"
+				""
+			]//String[]:Weapon name of which weapons can use this ammo
 		}
 	}
 }
 
-forward OnBulletFired()
+Json for armor
 
-GetFunctionByName(GetMyHandle(), "${funcCallback}");
+{
+	"Armor": {
+		{
+			"Enabled": "",//Bool:Enable armor or not
+			"Name": "",//String:Armor's name to display
+			"Price": "",//Int:Armor's prize
+			"Describe": "",//String:The describe of armor
+			"Callback": "",//String:The name of what function to call when apply armor 
+		}
+	}
+}
+*/	
+/* 
 
- */	
+// File: Ammo.json
+{
+	"Ammo": {
+		"Ammo_Type_One": {
+			"m_Description": "",
+			"m_Enabled": "",
+			"m_Price": "",
+			"m_BuyTime": "",
+			"m_BuyInTime": "",
+			"m_AllowedWeapon": [
+
+			]
+		}
+	}
 }
 
-stock int GetClientActiveWeapon(int client){
-	char buf[MAXN],bf2[MAXN];
-	GetClientWeapon(client,buf,sizeof(buf));
-	CS_GetTranslatedWeaponAlias(buf,bf2,sizeof(bf2));
-	int weaponid=CS_WeaponIDToItemDefIndex(CS_AliasToWeaponID(bf2));
-	return weaponid;
+// File: Armor.json
+{
+	"Armor": {
+		"Armor_Type_One": {
+			"m_Description": "",
+			"m_Enabled": "",
+			"m_Price": ""
+		}
+	}
+}
+
+To considering the framework structure, I removed several field which described below: 
+"Callback", and "HookMode".
+
+The explanation is below:
+In fact, you can export a forward, then write specific script to do things what you want.
+
+To achieve what you want to do, you can do something below:
+
+int GetAmmoIdByName(const char[] name) {
+	foreach (i in ArrayList.Ammo) {
+		if strEqual(i.m_Name, name) {
+			return i;
+		}
+	}
+	// using -1 to represents not found
+	return -1;
+}
+
+Next, you can do it in your exported file:
+
+int g_iAmmoID;
+
+public void OnLibraryAdded(const char[] name) {
+	// check your library, then execute it, for example, set ID, etc.
+	// Next, to do things what you want.
+}
+
+// We make an example here, for example, takeDamage
+
+public void func_OnTakeDamage(int client, int attacker, int weaponID) {
+	ArrayList list = ammo.GetAllowedWeapons();
+	if list.Find(g_iAmmoID)  {
+		// execute take damage, or something what you want.
+	}
+}
+
+
+*/
+
+}
+
+stock int GetClientActiveWeapon(int client){//
+	/*
+	rewrite
+	*/
 }
 
 stock void VecShorten(float vs[3],float vr[3],float val){
@@ -135,7 +203,7 @@ public void OnPluginStart(){
 	RegConsoleCmd("Mgc_Toggle",Command_Toggle);
 }
 
-void ToggleMode(int client,int Mode=-1){
+void ToggleModeOfAmmo(int client,int Mode=-1){
 	if(!IsPlayerExist(client))return;
 	int weaponid=GetClientActiveWeapon(client);
 	if(IsProjectile(view_as<ItemDef>(weaponid))||IsKnife(view_as<ItemDef>(weaponid)))return;
@@ -153,10 +221,12 @@ void ToggleMode(int client,int Mode=-1){
 			PrintToChat(client,"当前子弹 : 普通子弹");
 		return;
 	}
-	else ToggleMode(client);	
+	else ToggleModeOfAmmo(client);	
 }
 
-public int FreezeMenuHandler(Menu menu, MenuAction action, int param1, int param2) {
+//ToggleModeOfArmor
+
+public int FreezeMenuHandler(Menu menu, MenuAction action, int param1, int param2) {//rewrite
 	if (action==MenuAction_Select) {
 		int client=param1;
 		char info[MAXN];
@@ -177,7 +247,7 @@ public int FreezeMenuHandler(Menu menu, MenuAction action, int param1, int param
 
 void CheckOnAmmoRemain(int client){
 	if(!IsPlayerExist(client))return;
-	if(!AmmoNumNow(client))ToggleMode(client,0);
+	if(!AmmoNumNow(client))ToggleModeOfAmmo(client,0);
 }
 
 public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcast) {
@@ -193,26 +263,15 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
 	}
 }
 
-public Action Event_OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype, int& weapon, float damageForce[3], float damagePosition[3]){
+public Action Event_OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype, int& weapon, float damageForce[3], float damagePosition[3]){//rewrite
 	if(!IsPlayerExist(attacker)||!IsPlayerExist(victim))return Plugin_Continue;
+	//Callback of Armor
 	int weaponid=GetClientActiveWeapon(attacker);
-	if(IsKnife(view_as<ItemDef>(weaponid))||IsProjectile(view_as<ItemDef>(weaponid)))return Plugin_Continue;
-	if(!ClientData[attacker].ammotype[weaponid])return Plugin_Continue;
-	switch(ClientData[attacker].ammotype[weaponid]){
-		case 1:{
-			damage=damage*1.2;
-			PrintToChat(attacker,"使用手工子弹！伤害x1.2！");
-		}
-		case 2:{
-			float Vel[3],Cop[3];
-			Cop[0]=damageForce[0];Cop[1]=damageForce[1];Cop[2]=0.0;
-			VecShorten(Cop,Vel,MAXSPEED*2.0);
-			Vel[2]=Max(MAXSPEED*2+1.0,damageForce[2]);
-			// PrintToChat(attacker,"%f %f %f:%f %f %f",damageForce[0],damageForce[1],damageForce[2],Vel[0],Vel[1],Vel[2]);
-			ToolsSetVelocity(victim,Vel);
-			PrintToChat(attacker,"使用推进子弹！对敌人造成击退！");
-		}
-	}
+	if(IsKnife(view_as<ItemDef>(weaponid))||IsProjectile(view_as<ItemDef>(weaponid)))return Plugin_Changed;
+	if(!ClientData[attacker].ammotype[weaponid])return Plugin_Changed;
+	/*
+	Callback of Ammo
+	*/
 	return Plugin_Changed;
 }
 
@@ -242,8 +301,7 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 
 public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast) {
 	int client=GetClientOfUserId(event.GetInt("userid"));
-	if(!IsPlayerExist(client,false))
-		return;
+	if(!IsPlayerExist(client,false))return;
 	ClientData[client].Init();
 }
 
@@ -268,6 +326,7 @@ void ShowFreezeMenu(int client){
 	menu.Display(client,0);
 }
 
+//ShowMenu in round
 public Action Command_BuyAmmo(int client, int args) {
 	if(!IsPlayerExist(client))return;
 	ShowFreezeMenu(client);
@@ -275,5 +334,23 @@ public Action Command_BuyAmmo(int client, int args) {
 
 public Action Command_Toggle(int client, int args) {
 	if(!IsPlayerExist(client))return;
-	ToggleMode(client);
+	ToggleModeOfAmmo(client);
+}
+
+/**
+ * @brief Converts string of "yes/on", "no/off", "false/true", "1/0" to a boolean value.  Always uses english as main language.
+ * 
+ * @param sOption           The string to be converted.
+ * @return                  True if string is "yes", false otherwise.
+ **/
+stock bool ConfigSettingToBool(char[] sOption)
+{
+	// If option is equal to "yes", then return true
+	if (!strcmp(sOption, "yes", false) || !strcmp(sOption, "on", false) || !strcmp(sOption, "true", false) || !strcmp(sOption, "1", false))
+	{
+		return true;
+	}
+	
+	// Option isn't yes
+	return false;
 }
