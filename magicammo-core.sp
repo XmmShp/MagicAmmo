@@ -36,6 +36,7 @@ enum struct ServerData
 {
 	StringMap AmmoMap;
 	StringMapSnapshot AmmoSnapshot;
+	float RespondDamage;
 }
 
 ServerData gServerData;
@@ -65,29 +66,31 @@ enum struct forward_t
 
 	void Init()
 	{
-		this.OnTakeDamage = new GlobalForward("MagicAmmo_OnTakeDamage", ET_Ignore, Param_Cell, Param_CellByRef, Param_FloatByRef, Param_CellByRef, Param_Array);
-		this.OnBulletFire = new GlobalForward("MagicAmmo_OnBulletFire", ET_Ignore, Param_Cell, Param_Cell, Param_Array);
+		this.OnTakeDamage = new GlobalForward("MagicAmmo_OnTakeDamage", ET_Ignore, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_Array, Param_String);
+		this.OnBulletFire = new GlobalForward("MagicAmmo_OnBulletFire", ET_Ignore, Param_Cell, Param_Cell, Param_Array, Param_String);
 		//Action MagicAmmo_OnTakedamage(int attacker,int victim,int weapon,int ammoid,...)
 		//int victim, int& attacker,float& damage, int& weapon, float damageForce[3]
 	}
 
-	void _OnTakeDamage(int victim, int& attacker,float& damage, int& weapon, float damageForce[3])
+	void _OnTakeDamage(int victim, int attacker,float damage, int weapon, float damageForce[3],const char[] ammoname)
 	{
 		Call_StartForward(this.OnTakeDamage);
 		Call_PushCell(victim);
-		Call_PushCellRef(attacker);
-		Call_PushFloatRef(damage);
-		Call_PushCellRef(weapon);
+		Call_PushCell(attacker);
+		Call_PushFloat(damage);
+		Call_PushCell(weapon);
 		Call_PushArray(damageForce,3);
+		Call_PushString(ammoname);
 		Call_Finish();
 	}
 
-	void _OnBulletFire(int client,int weapon,float vpos[3])
+	void _OnBulletFire(int client,int weapon,float vpos[3],const char[] ammoname)
 	{
 		Call_StartForward(this.OnBulletFire);
 		Call_PushCell(client);
 		Call_PushCell(weapon);
 		Call_PushArray(vpos,3);
+		Call_PushString(ammoname);
 		Call_Finish();
 	}
 }
@@ -98,6 +101,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 {
 	RegPluginLibrary("MagicAmmo");
 	gForward.Init();
+	CreateNative("MagicAmmo_PostDamage",Native_PostDamage);
 	return APLRes_Success;
 }
 
@@ -178,12 +182,15 @@ public void OnClientPostAdminCheck(int client){
 }
 
 public Action Hook_OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype, int& weapon, float damageForce[3], float damagePosition[3]){
-	// if(!IsPlayerExist(attacker)||!IsPlayerExist(victim))return Plugin_Continue;
-	// int weaponid=GetClientActiveWeapon(attacker);
-	// if(IsKnife(view_as<ItemDef>(weaponid))||IsProjectile(view_as<ItemDef>(weaponid)))return Plugin_Changed;
-	// if(!ClientData[attacker].ammotype[weaponid])return Plugin_Changed;
-	//_OnTakeDamage(int victim, int& attacker,float& damage, int& weapon, float damageForce[3])
-	gForward._OnTakeDamage(victim, attacker, damage, weapon, damageForce);
+	if(!IsPlayerExist(attacker)||!IsPlayerExist(victim))return Plugin_Continue;
+	int weaponid=GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex");
+	if(!IsFirableWeapon(weaponid))return Plugin_Continue;
+	AmmoData ammo;
+	if(!GetAmmoByIndex(gClientData[attacker].WeaponAmmo[weaponid],ammo))return Plugin_Continue;
+	gServerData.RespondDamage=damage;
+	gForward._OnTakeDamage(victim, attacker, damage, weapon, damageForce, ammo.Name);
+	damage=gServerData.RespondDamage;
+	return Plugin_Changed;
 }
 
 void LoadCFGofAmmo(){
@@ -261,6 +268,7 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
 
 public Action Event_BulletImpact(Event event, const char[] name, bool dontBroadcast){
 	int client=GetClientOfUserId(event.GetInt("userid"));
+	if(!IsPlayerExist(client))return;
 	int iWeapon=gClientData[client].LastWeapon;
 
 	if (!IsFirableWeapon(iWeapon))return;
@@ -270,7 +278,9 @@ public Action Event_BulletImpact(Event event, const char[] name, bool dontBroadc
 	vpos[1]=event.GetFloat("y");
 	vpos[2]=event.GetFloat("z");
 	if(gClientData[client].Hit){
-		gForward._OnBulletFire(client,iWeapon,vpos);
+		AmmoData ammo;
+		if(!GetAmmoByIndex(gClientData[client].WeaponAmmo[iWeapon],ammo))return;
+		gForward._OnBulletFire(client,iWeapon,vpos,ammo.Name);
 		gClientData[client].Hit=false;
 	}
 }
@@ -280,6 +290,7 @@ bool IsFirableWeapon(int weapon){
 	return IsPistol(Weapon) || IsSMG(Weapon) || IsSR(Weapon) || IsSG(Weapon) || IsMG(Weapon) || IsAR(Weapon);
 }
 
+//Waiting for test int[], float[]
 bool GetAmmoByIndex(int index,AmmoData ammodata){
 	if(index>gServerData.AmmoMap.Size || index <= 0)return false;
 	index--;
@@ -303,4 +314,8 @@ bool IsValidAmmo(int index,int weapon=-1){
 	if(weapon==-1)return true;
 	if(ammo.AllowedWeapon.FindValue(weapon)!=-1)return true;
 	return false;
+}
+
+public int Native_PostDamage(Handle plugin, int numParams){
+	gServerData.RespondDamage=GetNativeCell(1);
 }
