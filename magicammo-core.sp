@@ -48,6 +48,7 @@ enum struct ServerData{
 	StringMapSnapshot AmmoSnapshot;
 	float RespondDamage;
 	Roundstate roundstate;
+	bool dbgmode;
 }
 ServerData gServerData;
 
@@ -115,6 +116,7 @@ public void OnPluginStart(){
 
 	RegConsoleCmd("mgc_toggle",cmd_toggle_ammo,"Toggle client's ammotype");
 	RegConsoleCmd("mgc_callstore",cmd_call_store,"Show Menu Of Ammo to client");
+	RegConsoleCmd("mgc_dbgmode",cmd_debug_mode);
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max){
@@ -229,6 +231,7 @@ void ShowMenuStore(int client){
 				Format(string(info),"%d|%d|1",i,ammo.Price);
 				Format(string(display),"[%s] : %d$/枚",ammo.Name,ammo.Price);
 				menu.AddItem(info,display);
+				Dbg("Added");
 			}
 		}
 	}
@@ -243,10 +246,13 @@ void ShowMenuStore(int client){
 				Format(string(info),"%d|%d|%d",i,ammo.Price*ammo.OneGrp,ammo.OneGrp);
 				Format(string(display),"[%s] : %d$/组 (%d枚/组 <-> %d$/枚)",ammo.Name,ammo.Price*ammo.OneGrp,ammo.OneGrp,ammo.Price);
 				menu.AddItem(info,display);
+				Dbg("Added");
 			}
 		}
 	}
 	menu.Display(client,0);
+	Dbg("Shown");
+	
 }
 
 //-------------------------- Callback Of SDKhook--------------------------------
@@ -346,6 +352,14 @@ int ReadAt(char[] str,int &pos){
 	while(IsCharNumeric(str[pos]))ret=ret*10+(str[pos]^48),pos++;
 	return ret;
 }
+
+void Dbg(const char[] format, any ...){
+	if(gServerData.dbgmode){
+		char buf[NORMAL_LINE_LENGTH];
+		VFormat(string(buf), format, 2);
+		PrintToChatAll(buf);
+	}
+}
 //-------------------------- Handles of menu -------------------------------------------
 public int MenuStoreHandle(Menu menu, MenuAction action, int param1, int param2) {
 	if (action==MenuAction_Select){
@@ -379,7 +393,11 @@ public Action cmd_toggle_ammo(int client, int args) {
 
 public Action cmd_call_store(int client, int args){
 	if(!IsPlayerExist(client))return;
+	Dbg("%d call store",client);
 	ShowMenuStore(client);
 }
 
+public Action cmd_debug_mode(int client,int args){
+	gServerData.dbgmode=true;
+}
 
