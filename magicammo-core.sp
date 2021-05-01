@@ -146,7 +146,7 @@ void ToggleModeOfAmmo(int client,int Mode=-1){
 
 	if(Mode==-1){
 		gClientData[client].WeaponAmmo[iWeapon]++;
-		if(gClientData[client].WeaponAmmo[iWeapon]>=gServerData.AmmoMap.Size)
+		if(gClientData[client].WeaponAmmo[iWeapon]>gServerData.AmmoMap.Size)
 			gClientData[client].WeaponAmmo[iWeapon]=0;
 	}
 	else if(Mode==gClientData[client].WeaponAmmo[iWeapon])return;
@@ -221,6 +221,7 @@ void ShowMenuStore(int client){
 	Menu menu=new Menu(MenuStoreHandle);
 	menu.SetTitle("[子弹商店]");
 	menu.ExitButton=true;
+	Dbg("%d",gServerData.roundstate);
 	if(gServerData.roundstate==RoundState_InRound){
 		int weaponid=ToolsGetWeaponDefIndex(ToolsGetActiveWeapon(client));
 		for(int i=1;i<=gServerData.AmmoMap.Size;i++){
@@ -229,6 +230,7 @@ void ShowMenuStore(int client){
 			if(view_as<bool>((view_as<int>(gServerData.roundstate)&view_as<int>(ammo.BuyMode)))&&ammo.AllowedWeapon.FindValue(weaponid)!=-1){
 				char info[NORMAL_LINE_LENGTH],display[NORMAL_LINE_LENGTH];
 				Format(string(info),"%d|%d|1",i,ammo.Price);
+				Dbg(info);
 				Format(string(display),"[%s] : %d$/枚",ammo.Name,ammo.Price);
 				menu.AddItem(info,display);
 				Dbg("Added");
@@ -236,14 +238,16 @@ void ShowMenuStore(int client){
 		}
 	}
 	else {
-		int weapon1=ToolsGetWeaponDefIndex(GetPlayerWeaponSlot(client,1));
-		int weapon2=ToolsGetWeaponDefIndex(GetPlayerWeaponSlot(client,2));
+		int weapon1=ToolsGetWeaponDefIndex(GetPlayerWeaponSlot(client,0));
+		int weapon2=ToolsGetWeaponDefIndex(GetPlayerWeaponSlot(client,1));
+		Dbg("%d %d",weapon1,weapon2);
 		for(int i=1;i<=gServerData.AmmoMap.Size;i++){
 			AmmoData ammo;
 			GetAmmoByIndex(i,ammo);
 			if(view_as<bool>((view_as<int>(gServerData.roundstate)&view_as<int>(ammo.BuyMode)))&&(ammo.AllowedWeapon.FindValue(weapon1)!=-1||ammo.AllowedWeapon.FindValue(weapon2)!=-1)){
 				char info[NORMAL_LINE_LENGTH],display[NORMAL_LINE_LENGTH];
 				Format(string(info),"%d|%d|%d",i,ammo.Price*ammo.OneGrp,ammo.OneGrp);
+				Dbg(info);
 				Format(string(display),"[%s] : %d$/组 (%d枚/组 <-> %d$/枚)",ammo.Name,ammo.Price*ammo.OneGrp,ammo.OneGrp,ammo.Price);
 				menu.AddItem(info,display);
 				Dbg("Added");
@@ -301,10 +305,12 @@ public Action Event_BulletImpact(Event event, const char[] name, bool dontBroadc
 	vpos[1]=event.GetFloat("y");
 	vpos[2]=event.GetFloat("z");
 	if(gClientData[client].Hit){
+		gClientData[client].Hit=false;
+		if(!gClientData[client].WeaponAmmo[iWeapon])return;
 		AmmoData ammo;
 		if(!GetAmmoByIndex(gClientData[client].WeaponAmmo[iWeapon],ammo))return;
 		gForward._OnBulletFire(client,iWeapon,vpos,ammo.Name);
-		gClientData[client].Hit=false;
+		if(--gClientData[client].AmmoNum[gClientData[client].WeaponAmmo[iWeapon]] == 0)ToggleModeOfAmmo(client,0);
 	}
 }
 
@@ -366,8 +372,10 @@ public int MenuStoreHandle(Menu menu, MenuAction action, int param1, int param2)
 		int client=param1;
 		char info[NORMAL_LINE_LENGTH];
 		menu.GetItem(param2,string(info));
+		Dbg(info);
 		int pos=0;
 		int index=ReadAt(info,pos),money=ReadAt(info,pos),grpnum=ReadAt(info,pos);
+		Dbg("%d %d %d",index,money,grpnum);
 		int playermoney=ToolsGetMoney(client);
 		if(playermoney>=money){
 			PrintToChat(client,"购买成功");
