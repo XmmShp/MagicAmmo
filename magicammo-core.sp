@@ -17,14 +17,20 @@ public Plugin myinfo ={
 	name = "MagicAmmo-Core",
 	author = "XmmShp",
 	description = "The core of Magicammo plugin",
-	version = "1.0.0.0", // Follows git commit
+	version = "1.1.0.0", // Follows git commit
 	url = "https://github.com/XmmShp/MagicAmmo"
 };
 
 //-------------------------- Defination of enum--------------------------------
 enum Roundstate{
-	RoundState_InFreezeTime,
+	RoundState_InFreezeTime=1,
 	RoundState_InRound
+};
+
+enum BuyMode{
+	BuyMode_InFreezeTime=1,
+	BuyMode_InRound,
+	BuyMode_InAll
 };
 
 //-------------------------- Defination of struct--------------------------------
@@ -32,7 +38,7 @@ enum struct AmmoData {
 	int Index;
 	char Name[32];
 	int Price;
-	int BuyMode;//0->All 1->PreRound 2->InRound
+	BuyMode BuyMode;//0->All 1->PreRound 2->InRound
 	int OneGrp;
 	ArrayList AllowedWeapon; //
 }
@@ -108,7 +114,8 @@ public void OnPluginStart(){
 	HookEvent("round_start",Event_RoundStart);
 	HookEvent("round_freeze_end",Event_FreezeEnd);
 
-	RegConsoleCmd("mgc_toggle",cmd_toggle_ammo);
+	RegConsoleCmd("mgc_toggle",cmd_toggle_ammo,"Toggle client's ammotype");
+	RegConsoleCmd("mgc_callstore",cmd_call_store,"Show Menu Of Ammo to client");
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max){
@@ -133,7 +140,7 @@ public void OnClientPostAdminCheck(int client){
 //-------------------------- Functions of practice--------------------------------
 void ToggleModeOfAmmo(int client,int Mode=-1){
 	if(!IsPlayerExist(client))return;
-	int iWeapon=GetEntProp(ToolsGetActiveWeapon(client), Prop_Send, "m_iItemDefinitionIndex");
+	int iWeapon=ToolsGetWeaponDefIndex(ToolsGetActiveWeapon(client));
 	if (!IsFirableWeapon(iWeapon))return;
 
 	if(Mode==-1){
@@ -184,7 +191,7 @@ void LoadAllAmmoData(KeyValues kv){
 		if(!kv.GetSectionName(string(sSecName)))continue;
 		kv.GetString("m_Name", string(data.Name),"NULL");
 		data.Price=kv.GetNum("m_Price",0);
-		data.BuyMode=kv.GetNum("m_BuyMode",0);
+		data.BuyMode=view_as<BuyMode>(kv.GetNum("m_BuyMode",0));
 		data.OneGrp=kv.GetNum("m_BuyNumOnce",0);
 		char sWeapon[64][NORMAL_LINE_LENGTH],buf[FILE_LINE_LENGTH];
 		kv.GetString("m_AllowedWeapon",string(buf),"");
@@ -208,12 +215,45 @@ void LoadAllAmmoData(KeyValues kv){
 	delete tempList;
 }
 
-
+void ShowMenuStore(int client){
+	if(!IsPlayerExist(client))return;
+	Menu menu=new Menu(MenuStoreHandle);
+	menu.SetTitle("[子弹商店]");
+	menu.ExitButton=true;
+	if(gServerData.roundstate==RoundState_InRound){
+		int weaponid=ToolsGetWeaponDefIndex(ToolsGetActiveWeapon(client));
+		for(int i=1;i<=gServerData.AmmoMap.Size;i++){
+			AmmoData ammo;
+			GetAmmoByIndex(i,ammo);
+			if(view_as<bool>((view_as<int>(gServerData.roundstate)&view_as<int>(ammo.BuyMode)))&&ammo.AllowedWeapon.FindValue(weaponid)!=-1){
+				char info[NORMAL_LINE_LENGTH],display[NORMAL_LINE_LENGTH];
+				Format(string(info),"%d|%d|1",i,ammo.Price);
+				Format(string(display),"[%s] : %d$/枚",ammo.Name,ammo.Price);
+				menu.AddItem(info,display);
+			}
+		}
+	}
+	else {
+		int weapon1=ToolsGetWeaponDefIndex(GetPlayerWeaponSlot(client,1));
+		int weapon2=ToolsGetWeaponDefIndex(GetPlayerWeaponSlot(client,2));
+		for(int i=1;i<=gServerData.AmmoMap.Size;i++){
+			AmmoData ammo;
+			GetAmmoByIndex(i,ammo);
+			if(view_as<bool>((view_as<int>(gServerData.roundstate)&view_as<int>(ammo.BuyMode)))&&(ammo.AllowedWeapon.FindValue(weapon1)!=-1||ammo.AllowedWeapon.FindValue(weapon2)!=-1)){
+				char info[NORMAL_LINE_LENGTH],display[NORMAL_LINE_LENGTH];
+				Format(string(info),"%d|%d|%d",i,ammo.Price*ammo.OneGrp,ammo.OneGrp);
+				Format(string(display),"[%s] : %d$/组 (%d枚/组 <-> %d$/枚)",ammo.Name,ammo.Price*ammo.OneGrp,ammo.OneGrp,ammo.Price);
+				menu.AddItem(info,display);
+			}
+		}
+	}
+	menu.Display(client,0);
+}
 
 //-------------------------- Callback Of SDKhook--------------------------------
 public Action Hook_OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype, int& weapon, float damageForce[3], float damagePosition[3]){
 	if(!IsPlayerExist(attacker)||!IsPlayerExist(victim))return Plugin_Continue;
-	int weaponid=GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex");
+	int weaponid=ToolsGetWeaponDefIndex(weapon);
 	if(!IsFirableWeapon(weaponid))return Plugin_Continue;
 	AmmoData ammo;
 	if(!GetAmmoByIndex(gClientData[attacker].WeaponAmmo[weaponid],ammo))return Plugin_Continue;
@@ -277,8 +317,8 @@ public int Native_PostDamage(Handle plugin, int numParams){
 }
 
 
-
 //-------------------------- Functions Of Auxiliary --------------------------------
+
 bool IsFirableWeapon(int weapon){
 	ItemDef Weapon=view_as<ItemDef>(weapon);
 	return IsPistol(Weapon) || IsSMG(Weapon) || IsSR(Weapon) || IsSG(Weapon) || IsMG(Weapon) || IsAR(Weapon);
@@ -301,6 +341,35 @@ bool IsValidAmmo(int index,int weapon=-1){
 	return false;
 }
 
+int ReadAt(char[] str,int &pos){
+	int ret=0;
+	while(!IsCharNumeric(str[pos]))pos++;
+	while(IsCharNumeric(str[pos]))ret=ret*10+(str[pos]^48),pos++;
+	return ret;
+}
+//-------------------------- Handles of menu -------------------------------------------
+public int MenuStoreHandle(Menu menu, MenuAction action, int param1, int param2) {
+	if (action==MenuAction_Select){
+		int client=param1;
+		char info[NORMAL_LINE_LENGTH];
+		menu.GetItem(param2,string(info));
+		int pos=0;
+		int index=ReadAt(info,pos),money=ReadAt(info,pos),grpnum=ReadAt(info,pos);
+		int playermoney=ToolsGetMoney(client);
+		if(playermoney>=money){
+			PrintToChat(client,"购买成功");
+			ToolsSetMoney(client,playermoney-money);
+			gClientData.AmmoNum[index]+=grpnum;
+		}
+		else {
+			PrintToChat(client,"资金不足,购买失败");
+		}
+		ShowMenuStore(client);
+	}
+	else if (action==MenuAction_End){
+		CloseHandle(menu);
+	}
+}
 
 
 //-------------------------- Functions Of Call Console Command --------------------------------
@@ -309,5 +378,9 @@ public Action cmd_toggle_ammo(int client, int args) {
 	ToggleModeOfAmmo(client);
 }
 
+public Action cmd_call_store(int client, int args){
+	if(!IsPlayerExist(client))return;
+	ShowMenuStore(client);
+}
 
 
