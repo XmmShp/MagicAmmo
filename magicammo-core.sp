@@ -52,7 +52,6 @@ enum struct ServerData{
 ServerData gServerData;
 
 enum struct ClientData{
-	// ArrayList AmmoNum;
 	int AmmoNum[MAXAMMOTYPE];
 	int WeaponAmmo[MAXWEAPONNUM];
 	bool Hit;
@@ -359,7 +358,7 @@ public int MenuStoreHandle(Menu menu, MenuAction action, int param1, int param2)
 		if(playermoney>=money){
 			PrintToChat(client,"购买成功");
 			ToolsSetMoney(client,playermoney-money);
-			gClientData.AmmoNum[index]+=grpnum;
+			gClientData[client].AmmoNum[index]+=grpnum;
 		}
 		else {
 			PrintToChat(client,"资金不足,购买失败");
