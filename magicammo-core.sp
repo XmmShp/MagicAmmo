@@ -13,8 +13,7 @@
 
 #include <laper32>
 
-public Plugin myinfo =
-{
+public Plugin myinfo ={
 	name = "MagicAmmo-Core",
 	author = "XmmShp",
 	description = "The core of Magicammo plugin",
@@ -22,8 +21,14 @@ public Plugin myinfo =
 	url = "https://github.com/XmmShp/MagicAmmo"
 };
 
-enum struct AmmoData // ammo_t
-{
+//-------------------------- Defination of enum--------------------------------
+enum Roundstate{
+	RoundState_InFreezeTime,
+	RoundState_InRound
+};
+
+//-------------------------- Defination of struct--------------------------------
+enum struct AmmoData {
 	int Index;
 	char Name[32];
 	int Price;
@@ -32,17 +37,15 @@ enum struct AmmoData // ammo_t
 	ArrayList AllowedWeapon; //
 }
 
-enum struct ServerData
-{
+enum struct ServerData{
 	StringMap AmmoMap;
 	StringMapSnapshot AmmoSnapshot;
 	float RespondDamage;
+	Roundstate roundstate;
 }
-
 ServerData gServerData;
 
-enum struct ClientData
-{
+enum struct ClientData{
 	// ArrayList AmmoNum;
 	int AmmoNum[MAXAMMOTYPE];
 	int WeaponAmmo[MAXWEAPONNUM];
@@ -59,8 +62,7 @@ enum struct ClientData
 }
 ClientData gClientData[MAXPLAYERS + 1];
 
-enum struct forward_t
-{
+enum struct forward_t{
 	GlobalForward OnTakeDamage;
 	GlobalForward OnBulletFire;
 
@@ -94,57 +96,41 @@ enum struct forward_t
 		Call_Finish();
 	}
 }
-
 forward_t gForward;
 
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
+//-------------------------- Functions Called by Forward--------------------------------
+public void OnPluginStart(){
+	gServerData.AmmoMap = new StringMap();
+	// LoadCFGofAmmo();
+	HookEvent("bullet_impact",Event_BulletImpact);
+	HookEvent("weapon_fire",Event_WeaponFire);
+	HookEvent("player_death",Event_PlayerDeath);
+	HookEvent("round_start",Event_RoundStart);
+	HookEvent("round_freeze_end",Event_FreezeEnd);
+
+	RegConsoleCmd("mgc_toggle",cmd_toggle_ammo);
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max){
 	RegPluginLibrary("MagicAmmo");
 	gForward.Init();
 	CreateNative("MagicAmmo_PostDamage",Native_PostDamage);
 	return APLRes_Success;
 }
 
-public void OnPluginStart()
-{
-	gServerData.AmmoMap = new StringMap();
-	// LoadCFGofAmmo();
-	HookEvent("bullet_impact",Event_BulletImpact);
-	HookEvent("weapon_fire",Event_WeaponFire);
-	HookEvent("player_death",Event_PlayerDeath);
-
-	RegConsoleCmd("out_info", cmd_out_info,"Print The Info Of The Item");
-	RegConsoleCmd("mgc_toggle",cmd_toggle_ammo);
+public void OnMapStart(){
+	LoadCFGofAmmo();
 }
 
-
-public Action cmd_out_info(int client, int params){
-	if (params < 1)
+public void OnClientPostAdminCheck(int client){
+	if (IsPlayerExist(client, false))
 	{
-		return Plugin_Handled;
+		gClientData[client].Init();
+		SDKHook(client, SDKHook_OnTakeDamage, Hook_OnTakeDamage);
 	}
-
-	char sArg[32];
-	GetCmdArg(1, string(sArg));
-
-	AmmoData data;
-	gServerData.AmmoMap.GetArray(sArg, data, sizeof(AmmoData));
-
-	PrintToServer(data.Name);
-
-	for (int i=0; i < data.AllowedWeapon.Length; i++)
-	{
-		PrintToServer("idx: %d", data.AllowedWeapon.Get(i));
-	}
-
-	return Plugin_Handled;
-}
-public Action cmd_toggle_ammo(int client, int args) {
-	if(!IsPlayerExist(client))return;
-	ToggleModeOfAmmo(client);
 }
 
-
+//-------------------------- Functions of practice--------------------------------
 void ToggleModeOfAmmo(int client,int Mode=-1){
 	if(!IsPlayerExist(client))return;
 	int iWeapon=GetEntProp(ToolsGetActiveWeapon(client), Prop_Send, "m_iItemDefinitionIndex");
@@ -167,30 +153,6 @@ void ToggleModeOfAmmo(int client,int Mode=-1){
 			PrintToChat(client,"当前子弹 : %s , 剩余数量 %d 枚",ammodata.Name,gClientData[client].AmmoNum[gClientData[client].WeaponAmmo[iWeapon]]);
 		}
 	else ToggleModeOfAmmo(client);	
-}
-
-public void OnMapStart(){
-	LoadCFGofAmmo();
-}
-
-public void OnClientPostAdminCheck(int client){
-	if (IsPlayerExist(client, false))
-	{
-		gClientData[client].Init();
-		SDKHook(client, SDKHook_OnTakeDamage, Hook_OnTakeDamage);
-	}
-}
-
-public Action Hook_OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype, int& weapon, float damageForce[3], float damagePosition[3]){
-	if(!IsPlayerExist(attacker)||!IsPlayerExist(victim))return Plugin_Continue;
-	int weaponid=GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex");
-	if(!IsFirableWeapon(weaponid))return Plugin_Continue;
-	AmmoData ammo;
-	if(!GetAmmoByIndex(gClientData[attacker].WeaponAmmo[weaponid],ammo))return Plugin_Continue;
-	gServerData.RespondDamage=damage;
-	gForward._OnTakeDamage(victim, attacker, damage, weapon, damageForce, ammo.Name);
-	damage=gServerData.RespondDamage;
-	return Plugin_Changed;
 }
 
 void LoadCFGofAmmo(){
@@ -246,6 +208,22 @@ void LoadAllAmmoData(KeyValues kv){
 	delete tempList;
 }
 
+
+
+//-------------------------- Callback Of SDKhook--------------------------------
+public Action Hook_OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype, int& weapon, float damageForce[3], float damagePosition[3]){
+	if(!IsPlayerExist(attacker)||!IsPlayerExist(victim))return Plugin_Continue;
+	int weaponid=GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex");
+	if(!IsFirableWeapon(weaponid))return Plugin_Continue;
+	AmmoData ammo;
+	if(!GetAmmoByIndex(gClientData[attacker].WeaponAmmo[weaponid],ammo))return Plugin_Continue;
+	gServerData.RespondDamage=damage;
+	gForward._OnTakeDamage(victim, attacker, damage, weapon, damageForce, ammo.Name);
+	damage=gServerData.RespondDamage;
+	return Plugin_Changed;
+}
+
+//-------------------------- Callback Of hookevent--------------------------------
 public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast){
 	int client=GetClientOfUserId(event.GetInt("userid"));
 	if(!IsPlayerExist(client,false))return;
@@ -285,12 +263,27 @@ public Action Event_BulletImpact(Event event, const char[] name, bool dontBroadc
 	}
 }
 
+public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast){
+	gServerData.roundstate=RoundState_InFreezeTime;
+}
+
+public Action Event_FreezeEnd(Event event, const char[] name, bool dontBroadcast){
+	gServerData.roundstate=RoundState_InRound;
+}
+
+//-------------------------- Callback Of Native --------------------------------
+public int Native_PostDamage(Handle plugin, int numParams){
+	gServerData.RespondDamage=GetNativeCell(1);
+}
+
+
+
+//-------------------------- Functions Of Auxiliary --------------------------------
 bool IsFirableWeapon(int weapon){
 	ItemDef Weapon=view_as<ItemDef>(weapon);
 	return IsPistol(Weapon) || IsSMG(Weapon) || IsSR(Weapon) || IsSG(Weapon) || IsMG(Weapon) || IsAR(Weapon);
 }
 
-//Waiting for test int[], float[]
 bool GetAmmoByIndex(int index,AmmoData ammodata){
 	if(index>gServerData.AmmoMap.Size || index <= 0)return false;
 	index--;
@@ -300,14 +293,6 @@ bool GetAmmoByIndex(int index,AmmoData ammodata){
 	return true;
 }
 
-/*
-*@brief---------Check if the ammo index is suit for weapon or not
-*
-*@index---------The index of ammo
-*@weapon--------The ItemDefination of weapon(-1 means no limit)
-*
-*@return--------True when ammo is existed and can use in this weapon
-*/
 bool IsValidAmmo(int index,int weapon=-1){
 	AmmoData ammo;
 	if(!GetAmmoByIndex(index,ammo))return false;
@@ -316,6 +301,13 @@ bool IsValidAmmo(int index,int weapon=-1){
 	return false;
 }
 
-public int Native_PostDamage(Handle plugin, int numParams){
-	gServerData.RespondDamage=GetNativeCell(1);
+
+
+//-------------------------- Functions Of Call Console Command --------------------------------
+public Action cmd_toggle_ammo(int client, int args) {
+	if(!IsPlayerExist(client))return;
+	ToggleModeOfAmmo(client);
 }
+
+
+
