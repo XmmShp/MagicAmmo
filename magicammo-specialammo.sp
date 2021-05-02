@@ -23,24 +23,46 @@ public void OnPluginStart(){
 	SetChatPrefix("[{purple}MagicAmmo{default}]");
 }
 
+public void OnMapStart(){
+	PrecacheModel("materials/sprites/xfireball3.vmt", true);
+}
+
 void ShortenVector(float vec[3],float len=100.0){
 	float rate=len/GetVectorLength(vec);
-	vec[0]/=rate,vec[1]/=rate,vec[2]/=rate;
+	vec[0]*=rate,vec[1]*=rate,vec[2]*=rate;
 }
+
+
 
 public void MagicAmmo_OnTakeDamage(int victim, int attacker,float damage, int weapon, float damageForce[3], char[] ammoname){
 	if(strcmp(ammoname,"knockback_sp")==0){
-		ShortenVector(damageForce,500.0);
-		if(damageForce[2]<100.0)damageForce[2]=100.0;
+		ShortenVector(damageForce,1000.0);
+		if(damageForce[2]<260.0)damageForce[2]=260.0;
 		ToolsSetVelocity(victim,damageForce);
 	}
 	if(strcmp(ammoname,"showdamage_sp")==0){
-		Chat(attacker,"^{yellow}来自 StatTrak™ 显伤追踪技术{defalult}^ : 你击中了 %N 造成了 %.0f 点伤害!",victim,damage);
+		SetChatPrefix("[{purple}MagicAmmo-显伤追踪技术{default}]");
+		Chat(attacker,"你击中 %N 造成了 %.0f 点伤害!",victim,damage);
+		SetChatPrefix("[{purple}MagicAmmo{default}]");
+	}
+	if(strcmp(ammoname,"invisible_sp")==0){
+		MagicAmmo_PostDamage(10.0);
+		int iFlags = ToolsGetEffect(victim);
+		if(iFlags & EF_NODRAW) return;
+		ToolsSetEffect(victim, iFlags | EF_NODRAW);
+		CreateTimer(3.0,InvisibleProcess,victim);
 	}
 }
 
 public void MagicAmmo_OnBulletFire(int client, int weapon, float vpos[3],char[] ammoname){
 	if(strcmp(ammoname,"explode_sp")==0){
-		UTIL_CreateExplosion(vpos,_,_,120.0,_,_,client,_,_);
+		UTIL_CreateExplosion(vpos,0, _, 55.0, 300.0, "m32", client, client);
+		SetEntProp(client, Prop_Send, "m_nBody", 0);
 	}
+}
+
+public Action InvisibleProcess(Handle timer,any client){
+	if(!IsPlayerExist(client))return;
+	int iFlags = ToolsGetEffect(client);
+	ToolsSetEffect(client, iFlags & (~EF_NODRAW));
 }

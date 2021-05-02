@@ -120,6 +120,10 @@ public void OnPluginStart(){
 	RegConsoleCmd("mgc_toggle",cmd_toggle_ammo,"Toggle client's ammotype");
 	RegConsoleCmd("mgc_callstore",cmd_call_store,"Show Menu Of Ammo to client");
 	RegConsoleCmd("mgc_dbgmode",cmd_debug_mode);
+
+	AddCommandListener(Command_Toggle,"buyammo2");//'.'
+	AddCommandListener(Command_BuyAmmo,"buyammo1");//','
+
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max){
@@ -291,9 +295,8 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
 	event.GetString("weapon",string(sWeapon));
 	CS_GetTranslatedWeaponAlias(sWeapon,string(sWeapon));
 	int iWeapon=CS_WeaponIDToItemDefIndex(CS_AliasToWeaponID(sWeapon));
-
 	if (!IsFirableWeapon(iWeapon))return;
-
+	if (!gClientData[client].AmmoNum[gClientData[client].WeaponAmmo[iWeapon]])ToggleModeOfAmmo(client,0);
 	gClientData[client].Hit=true;
 	gClientData[client].LastWeapon=iWeapon;
 }
@@ -315,7 +318,7 @@ public Action Event_BulletImpact(Event event, const char[] name, bool dontBroadc
 		AmmoData ammo;
 		if(!GetAmmoByIndex(gClientData[client].WeaponAmmo[iWeapon],ammo))return;
 		gForward._OnBulletFire(client,iWeapon,vpos,ammo.Key);
-		if(--gClientData[client].AmmoNum[gClientData[client].WeaponAmmo[iWeapon]] == 0)ToggleModeOfAmmo(client,0);
+		if(--gClientData[client].AmmoNum[gClientData[client].WeaponAmmo[iWeapon]]==0)Chat(client,"你的 %s 已经消耗一空",ammo.Name);
 	}
 }
 
@@ -332,7 +335,16 @@ public int Native_PostDamage(Handle plugin, int numParams){
 	gServerData.RespondDamage=GetNativeCell(1);
 }
 
+//-------------------------- Callback Of CommandListener --------------------------------
+public Action Command_Toggle(int client, const char[] command, int argc){
+	if(!IsPlayerExist(client))return;
+	ToggleModeOfAmmo(client);
+}
 
+public Action Command_BuyAmmo(int client, const char[] command, int argc){
+	if(!IsPlayerExist(client))return;
+	ShowMenuStore(client);
+}
 //-------------------------- Functions Of Auxiliary --------------------------------
 
 bool IsFirableWeapon(int weapon){
@@ -351,6 +363,7 @@ bool GetAmmoByIndex(int index,AmmoData ammodata){
 
 bool IsValidAmmo(int index,int weapon=-1){
 	AmmoData ammo;
+	if(!index)return true;
 	if(!GetAmmoByIndex(index,ammo))return false;
 	if(weapon==-1)return true;
 	if(ammo.AllowedWeapon.FindValue(weapon)!=-1)return true;
@@ -393,7 +406,7 @@ public int MenuStoreHandle(Menu menu, MenuAction action, int param1, int param2)
 			gClientData[client].AmmoNum[index]+=grpnum;
 		}
 		else {
-			PrintToChat(client,"资金不足,购买失败");
+			Chat(client,"资金不足,购买失败");
 		}
 		ShowMenuStore(client);
 	}
