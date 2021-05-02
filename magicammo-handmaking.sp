@@ -19,6 +19,10 @@ public Plugin myinfo ={
 	url = "https://github.com/XmmShp/MagicAmmo"
 };
 
+public void OnPluginStart(){
+	SetChatPrefix("[{purple}MagicAmmo{default}]");
+}
+
 public void MagicAmmo_OnTakeDamage(int victim, int attacker,float damage, int weapon, float damageForce[3], char[] ammoname){
 	if(strcmp(ammoname,"pistol_hm")==0){
 		MagicAmmo_PostDamage(damage*1.5);

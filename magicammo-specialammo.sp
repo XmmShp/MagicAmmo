@@ -19,6 +19,10 @@ public Plugin myinfo ={
 	url = "https://github.com/XmmShp/MagicAmmo"
 };
 
+public void OnPluginStart(){
+	SetChatPrefix("[{purple}MagicAmmo{default}]");
+}
+
 void ShortenVector(float vec[3],float len=100.0){
 	float rate=len/GetVectorLength(vec);
 	vec[0]/=rate,vec[1]/=rate,vec[2]/=rate;
@@ -31,12 +35,12 @@ public void MagicAmmo_OnTakeDamage(int victim, int attacker,float damage, int we
 		ToolsSetVelocity(victim,damageForce);
 	}
 	if(strcmp(ammoname,"showdamage_sp")==0){
-		Chat(attacker,"你击中了 %N 造成了 %.0f 点伤害!",victim,damage);
+		Chat(attacker,"^{yellow}来自 StatTrak™ 显伤追踪技术{defalult}^ : 你击中了 %N 造成了 %.0f 点伤害!",victim,damage);
 	}
 }
 
 public void MagicAmmo_OnBulletFire(int client, int weapon, float vpos[3],char[] ammoname){
 	if(strcmp(ammoname,"explode_sp")==0){
-		UTIL_CreateExplosion(vpos,_,_,55.0,_,_,client,_,_);
+		UTIL_CreateExplosion(vpos,_,_,120.0,_,_,client,_,_);
 	}
 }
