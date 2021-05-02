@@ -25,18 +25,18 @@ void ShortenVector(float vec[3],float len=100.0){
 }
 
 public void MagicAmmo_OnTakeDamage(int victim, int attacker,float damage, int weapon, float damageForce[3], char[] ammoname){
-	if(strcmp(ammoname,"knockback_sp")){
+	if(strcmp(ammoname,"knockback_sp")==0){
 		ShortenVector(damageForce,500.0);
 		if(damageForce[2]<100.0)damageForce[2]=100.0;
 		ToolsSetVelocity(victim,damageForce);
 	}
-	if(strcmp(ammoname,"showdamage_sp")){
+	if(strcmp(ammoname,"showdamage_sp")==0){
 		Chat(attacker,"你击中了 %N 造成了 %.0f 点伤害!",victim,damage);
 	}
 }
 
 public void MagicAmmo_OnBulletFire(int client, int weapon, float vpos[3],char[] ammoname){
-	if(strcmp(ammoname,"explode_sp")){
+	if(strcmp(ammoname,"explode_sp")==0){
 		UTIL_CreateExplosion(vpos,_,_,55.0,_,_,client,_,_);
 	}
 }
