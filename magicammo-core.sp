@@ -1,5 +1,5 @@
 /**
- * magicammo.sp
+ * magicammo-core.sp
  * Copyright (c) XmmShp 2019-2021. All Rights Reserved.
  *
  * The Core of magicammo plugin
@@ -11,13 +11,13 @@
 #define MAXAMMOTYPE 64
 #define MAXWEAPONNUM 70
 
-#include <laper32>
+#include<smlib2>
 
 public Plugin myinfo ={
 	name = "MagicAmmo-Core",
 	author = "XmmShp",
 	description = "The core of Magicammo plugin",
-	version = "1.1.0.0", // Follows git commit
+	version = "1.2.0.0", // Follows git commit
 	url = "https://github.com/XmmShp/MagicAmmo"
 };
 
@@ -36,9 +36,11 @@ enum BuyMode{
 //-------------------------- Defination of struct--------------------------------
 enum struct AmmoData {
 	int Index;
+	char Key[32];
 	char Name[32];
+	char Description[CONSOLE_LINE_LENGTH];
 	int Price;
-	BuyMode BuyMode;//0->All 1->PreRound 2->InRound
+	BuyMode BuyMode;
 	int OneGrp;
 	ArrayList AllowedWeapon; //
 }
@@ -108,6 +110,7 @@ forward_t gForward;
 public void OnPluginStart(){
 	gServerData.AmmoMap = new StringMap();
 	// LoadCFGofAmmo();
+	SetChatPrefix("[{purple}MagicAmmo{default}]");
 	HookEvent("bullet_impact",Event_BulletImpact);
 	HookEvent("weapon_fire",Event_WeaponFire);
 	HookEvent("player_death",Event_PlayerDeath);
@@ -154,11 +157,11 @@ void ToggleModeOfAmmo(int client,int Mode=-1){
 	else return;
 	
 	if(!gClientData[client].WeaponAmmo[iWeapon])
-		PrintToChat(client,"当前子弹 : 普通子弹");
+		Chat(client,"当前子弹 : 普通子弹");
 	else if(gClientData[client].AmmoNum[gClientData[client].WeaponAmmo[iWeapon]]>0 && IsValidAmmo(gClientData[client].WeaponAmmo[iWeapon],iWeapon)){
 			AmmoData ammodata;
 			GetAmmoByIndex(gClientData[client].WeaponAmmo[iWeapon],ammodata);
-			PrintToChat(client,"当前子弹 : %s , 剩余数量 %d 枚",ammodata.Name,gClientData[client].AmmoNum[gClientData[client].WeaponAmmo[iWeapon]]);
+			Chat(client,"当前子弹 : %s , 剩余数量 %d 枚",ammodata.Name,gClientData[client].AmmoNum[gClientData[client].WeaponAmmo[iWeapon]]);
 		}
 	else ToggleModeOfAmmo(client);	
 }
@@ -190,7 +193,9 @@ void LoadAllAmmoData(KeyValues kv){
 		if(!view_as<bool>(kv.GetNum("m_Enabled", 0))) continue;
 		char sSecName[NORMAL_LINE_LENGTH];
 		if(!kv.GetSectionName(string(sSecName)))continue;
+		strcopy(string(data.Key),sSecName);
 		kv.GetString("m_Name", string(data.Name),"NULL");
+		kv.GetString("m_Description", string(data.Description),"NULL");
 		data.Price=kv.GetNum("m_Price",0);
 		data.BuyMode=view_as<BuyMode>(kv.GetNum("m_BuyMode",0));
 		data.OneGrp=kv.GetNum("m_BuyNumOnce",0);
@@ -231,7 +236,7 @@ void ShowMenuStore(int client){
 				char info[NORMAL_LINE_LENGTH],display[NORMAL_LINE_LENGTH];
 				Format(string(info),"%d|%d|1",i,ammo.Price);
 				Dbg(info);
-				Format(string(display),"[%s] : %d$/枚",ammo.Name,ammo.Price);
+				Format(string(display),"%s : %d$/枚",ammo.Name,ammo.Price);
 				menu.AddItem(info,display);
 				Dbg("Added");
 			}
@@ -248,7 +253,7 @@ void ShowMenuStore(int client){
 				char info[NORMAL_LINE_LENGTH],display[NORMAL_LINE_LENGTH];
 				Format(string(info),"%d|%d|%d",i,ammo.Price*ammo.OneGrp,ammo.OneGrp);
 				Dbg(info);
-				Format(string(display),"[%s] : %d$/组 (%d枚/组 <-> %d$/枚)",ammo.Name,ammo.Price*ammo.OneGrp,ammo.OneGrp,ammo.Price);
+				Format(string(display),"%s : %d$/组 (%d枚/组 <-> %d$/枚)",ammo.Name,ammo.Price*ammo.OneGrp,ammo.OneGrp,ammo.Price);
 				menu.AddItem(info,display);
 				Dbg("Added");
 			}
@@ -267,7 +272,7 @@ public Action Hook_OnTakeDamage(int victim, int& attacker, int& inflictor, float
 	AmmoData ammo;
 	if(!GetAmmoByIndex(gClientData[attacker].WeaponAmmo[weaponid],ammo))return Plugin_Continue;
 	gServerData.RespondDamage=damage;
-	gForward._OnTakeDamage(victim, attacker, damage, weapon, damageForce, ammo.Name);
+	gForward._OnTakeDamage(victim, attacker, damage, weapon, damageForce, ammo.Key);
 	damage=gServerData.RespondDamage;
 	return Plugin_Changed;
 }
@@ -309,7 +314,7 @@ public Action Event_BulletImpact(Event event, const char[] name, bool dontBroadc
 		if(!gClientData[client].WeaponAmmo[iWeapon])return;
 		AmmoData ammo;
 		if(!GetAmmoByIndex(gClientData[client].WeaponAmmo[iWeapon],ammo))return;
-		gForward._OnBulletFire(client,iWeapon,vpos,ammo.Name);
+		gForward._OnBulletFire(client,iWeapon,vpos,ammo.Key);
 		if(--gClientData[client].AmmoNum[gClientData[client].WeaponAmmo[iWeapon]] == 0)ToggleModeOfAmmo(client,0);
 	}
 }
@@ -363,7 +368,7 @@ void Dbg(const char[] format, any ...){
 	if(gServerData.dbgmode){
 		char buf[NORMAL_LINE_LENGTH];
 		VFormat(string(buf), format, 2);
-		PrintToChatAll(buf);
+		ChatAll(buf);
 	}
 }
 //-------------------------- Handles of menu -------------------------------------------
@@ -376,9 +381,14 @@ public int MenuStoreHandle(Menu menu, MenuAction action, int param1, int param2)
 		int pos=0;
 		int index=ReadAt(info,pos),money=ReadAt(info,pos),grpnum=ReadAt(info,pos);
 		Dbg("%d %d %d",index,money,grpnum);
+		AmmoData ammo;
+		GetAmmoByIndex(index,ammo);
 		int playermoney=ToolsGetMoney(client);
 		if(playermoney>=money){
-			PrintToChat(client,"购买成功");
+			Chat(client,"购买 %s * %d 成功!",ammo.Name,grpnum);
+			if(gClientData[client].AmmoNum[index]==0){
+				Chat(client,"介绍：%s",ammo.Description);
+			}
 			ToolsSetMoney(client,playermoney-money);
 			gClientData[client].AmmoNum[index]+=grpnum;
 		}
