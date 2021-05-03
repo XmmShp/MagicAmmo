@@ -52,12 +52,27 @@ public void MagicAmmo_OnTakeDamage(int victim, int attacker,float damage, int we
 		ToolsSetEffect(victim, iFlags | EF_NODRAW);
 		CreateTimer(3.0,InvisibleProcess,victim);
 	}
+	if(strcmp(ammoname,"cure_sp")==0){
+		MagicAmmo_PostDamage(0.0);
+		int iHealth=ToolsGetHealth(victim);
+		if(iHealth>=100)return;
+		ToolsSetHealth(victim,iHealth+1);
+	}
+	
 }
 
 public void MagicAmmo_OnBulletFire(int client, int weapon, float vpos[3],char[] ammoname){
 	if(strcmp(ammoname,"explode_sp")==0){
 		UTIL_CreateExplosion(vpos,0, _, 55.0, 300.0, "m32", client, client);
-		SetEntProp(client, Prop_Send, "m_nBody", 0);
+	}
+	if(strcmp(ammoname,"flash_sp")==0){
+		DataPack pack=new DataPack();
+		pack.WriteCell(1);
+		pack.WriteFloat(vpos[0]);
+		pack.WriteFloat(vpos[1]);
+		pack.WriteFloat(vpos[2]);
+		pack.WriteCell(client);
+		CreateTimer(1.0,CreateFlash,pack);
 	}
 }
 
@@ -65,4 +80,19 @@ public Action InvisibleProcess(Handle timer,any client){
 	if(!IsPlayerExist(client))return;
 	int iFlags = ToolsGetEffect(client);
 	ToolsSetEffect(client, iFlags & (~EF_NODRAW));
+}
+
+public Action CreateFlash(Handle timer,DataPack pack){
+	pack.Reset();
+	int tm,client;float vpos[3];
+	tm=pack.ReadCell();vpos[0]=pack.ReadFloat();vpos[1]=pack.ReadFloat();vpos[2]=pack.ReadFloat();client=pack.ReadCell();
+	if(tm==6)return;
+	DataPack p2 = new DataPack();
+	p2.WriteCell(tm+1);p2.WriteFloat(vpos[0]);p2.WriteFloat(vpos[1]);p2.WriteFloat(vpos[2]);p2.WriteCell(client);
+	CreateTimer(5.0,CreateFlash,p2);
+	int ientity=CreateEntityByName("flashbang_projectile");
+	DispatchKeyValue(ientity, "classname", "flashbang_projectile");
+	DispatchSpawn(ientity);
+	TeleportEntity(ientity, vpos,NULL_VECTOR,NULL_VECTOR);
+	AcceptEntityInput(ientity,"InitializeSpawnFromWorld");
 }

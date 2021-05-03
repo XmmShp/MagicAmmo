@@ -323,6 +323,10 @@ public Action Event_BulletImpact(Event event, const char[] name, bool dontBroadc
 }
 
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast){
+	ChatAll("感谢使用 MagicAmmo (Powered by:VE社区 XmmShp)");
+	ChatAll("请尝试手持武器摁下','(逗号)来打开子弹商店 摁下'.'来切换当前装配的子弹");
+	ChatAll("您亦可将如下命令绑定至您喜爱的按键 mgc_toggle (切换子弹) mgc_callstore (打开商店)");
+	ChatAll("希望给您带来愉快的游戏体验");
 	gServerData.roundstate=RoundState_InFreezeTime;
 }
 
